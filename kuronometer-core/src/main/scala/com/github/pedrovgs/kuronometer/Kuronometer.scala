@@ -1,8 +1,9 @@
 package com.github.pedrovgs.kuronometer
 
-import cats.Eval
+import cats._
 import cats.implicits._
 import cats.free.Free
+
 import com.github.pedrovgs.kuronometer.KuronometerResults.{
   ConnectionError,
   KuronometerResult,
@@ -104,6 +105,74 @@ object Kuronometer {
         V.showError(
           "Kuronometer: Error gathering data related to your builds execution.")
     }
+  }
+
+  private def filterBuildExecutionData(buildExecution: BuildExecution,
+                                       config: Config): BuildExecution =
+    if (config.reportProjectInfo) {
+      buildExecution
+    } else {
+      buildExecution.copy(project = None)
+    }
+}
+
+object KuronometerTC {
+  import cats.{Functor, Applicative, ApplicativeError, FlatMap, MonadError}
+  import com.github.pedrovgs.kuronometer.free.algebra.{Reporter, View}
+  import com.github.pedrovgs.kuronometer.KuronometerResults.KuronometerError
+
+
+  private val kuronometerHeader = "== Kuronometer =="
+
+  def reportBuildFinished[F[_]](
+      buildExecution: BuildExecution,
+      config: Config)(implicit
+      R: Reporter[F],
+      V: View[F],
+      M: MonadError[F,KuronometerError]): F[KuronometerResult[BuildExecution]] = {
+    val filteredBuildExecution =
+      filterBuildExecutionData(buildExecution, config)
+    for {
+      result <- reportBuildExecution[F](filteredBuildExecution, config).attempt
+      _ <- showReportResult(result, config)
+    } yield result
+  }
+
+  // From cats 1.0
+  implicit class ApplicativeOps[F[_],A](p: F[A])(implicit A: Applicative[F]){
+    def whenA[A](cond: Boolean): F[Unit] =
+      if (cond) A.void(p) else A.pure(())
+  }
+
+
+  private def reportBuildExecution[F[_]](
+      buildExecution: BuildExecution,
+      config: Config)(implicit
+      M: Monad[F],
+      R: Reporter[F]): F[BuildExecution] =
+    R.reportBuildExecution(buildExecution, RemoteReport).whenA(config.reportDataRemotely)  >>
+    R.reportBuildExecution(buildExecution, LocalReport)
+
+  private def showReportResult[F[_]](
+      result: KuronometerResult[BuildExecution],
+      config: Config)(implicit
+      V: View[F],
+      E: FlatMap[F]): F[Message] = {
+    if (!config.verbose)
+      V.showMessage("")
+    else
+      result.fold(
+        {
+          case ConnectionError =>
+            V.showError(kuronometerHeader) >>
+            V.showError("Kuronometer: connection error reporting build execution to our servers :(")
+          case _ =>
+            V.showError(kuronometerHeader) >>
+            V.showError("Kuronometer: unknown error reporting build execution to our servers :(")
+        },
+        _ => V.showSuccess(kuronometerHeader) >>
+             V.showSuccess("Kuronometer: build execution reported!")
+      )
   }
 
   private def filterBuildExecutionData(buildExecution: BuildExecution,
