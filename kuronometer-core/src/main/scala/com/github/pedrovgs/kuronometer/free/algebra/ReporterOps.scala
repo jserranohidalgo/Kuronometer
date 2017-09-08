@@ -8,6 +8,12 @@ import com.github.pedrovgs.kuronometer.free.domain.{
   SummaryBuildStagesExecution
 }
 
+trait Reporter[F[_]]{
+  def reportBuildExecution(buildExecution: BuildExecution, report: Report): F[BuildExecution]
+  def getTotalBuildExecution(): F[SummaryBuildStagesExecution]
+  def getTodayBuildExecution(): F[SummaryBuildStagesExecution]
+}
+
 sealed trait ReporterOp[A]
 
 final case class ReportBuildExecution(buildExecution: BuildExecution,
