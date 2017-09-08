@@ -3,6 +3,12 @@ package com.github.pedrovgs.kuronometer.free.algebra
 import cats.free.{Free, Inject}
 import com.github.pedrovgs.kuronometer.free.domain.View.Message
 
+trait View[F[_]]{
+  def showMessage(message: Message): F[Message]
+  def showSuccess(message: Message): F[Message]
+  def showError(message: Message): F[Message]
+}
+
 sealed trait ViewOp[A]
 
 final case class ShowMessage(message: Message) extends ViewOp[Message]

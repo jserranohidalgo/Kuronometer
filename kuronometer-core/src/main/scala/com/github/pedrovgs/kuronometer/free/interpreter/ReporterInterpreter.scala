@@ -22,10 +22,39 @@ class ReporterInterpreter(implicit csvReporter: CsvReporter,
       apiClient.report(buildExecution)
     case ReportBuildExecution(buildExecution, LocalReport) =>
       csvReporter.report(buildExecution)
-    case GetTotalBuildExecution() => csvReporter.getTotalBuildExecutionStages
+    case GetTotalBuildExecution() =>
+      csvReporter.getTotalBuildExecutionStages
     case GetTodayBuildExecution() =>
       csvReporter.getBuildExecutionStagesSinceTimestamp(
         clock.todayMidnightTimestamp)
   }
 
+}
+
+
+object ReporterInterpreter{
+  import com.github.pedrovgs.kuronometer.free.algebra.Reporter
+  import com.github.pedrovgs.kuronometer.KuronometerResults.KuronometerResult
+  import com.github.pedrovgs.kuronometer.free.domain.BuildExecution
+  import com.github.pedrovgs.kuronometer.free.domain.{Report, SummaryBuildStagesExecution}
+
+  def CvsWebReporter(implicit csvReporter: CsvReporter,
+                       apiClient: KuronometerApiClient,
+                       clock: Clock) = new Reporter[KuronometerResult]{
+
+    def reportBuildExecution(buildExecution: BuildExecution,
+        report: Report): KuronometerResult[BuildExecution] =
+      report match {
+        case RemoteReport =>
+          apiClient.report(buildExecution)
+        case LocalReport =>
+          csvReporter.report(buildExecution)
+      }
+
+    def getTotalBuildExecution(): KuronometerResult[SummaryBuildStagesExecution] =
+      csvReporter.getTotalBuildExecutionStages
+
+    def getTodayBuildExecution(): KuronometerResult[SummaryBuildStagesExecution] =
+      csvReporter.getBuildExecutionStagesSinceTimestamp(clock.todayMidnightTimestamp)
+  }
 }
